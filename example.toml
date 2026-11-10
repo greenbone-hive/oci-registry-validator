@@ -1,0 +1,33 @@
+[run]
+mode = "probe"
+output_dir = "/tmp/registry-validator-evidence"
+strict_inventory = false
+max_capture_bytes = 1048576
+max_response_bytes = 8388608
+
+[[registries]]
+name = "example"
+url = "https://registry.example"
+auth = "auto"
+username_env = "REGISTRY_USERNAME"
+password_env = "REGISTRY_PASSWORD"
+allow_http = false
+verify_tls = true
+auth_hosts = ["auth.registry.example"]
+redirect_hosts = ["*.objects.example"]
+page_size = 100
+max_pages = 20
+max_repositories = 1000
+max_tags = 10000
+max_platforms = 20
+max_layer_bytes = 10737418240
+walk_catalog = false
+repositories = ["team/repository"]
+images = ["team/repository:latest"]
+
+[[registries.probes]]
+path = "/v2/team/repository/tags/list"
+scope = "repository:team/repository:pull"
+expected_statuses = [200]
+expected_content_types = ["application/json"]
+required = true

@@ -1,0 +1,31 @@
+[build-system]
+requires = ["hatchling>=1.26"]
+build-backend = "hatchling.build"
+
+[project]
+name = "openvas-registry-validator-poc"
+version = "0.1.0"
+description = "PoC validator for OpenVAS container-registry connectivity"
+readme = "README.md"
+requires-python = ">=3.11"
+dependencies = ["httpx>=0.27,<1"]
+
+[project.optional-dependencies]
+test = ["pytest>=8,<10", "ruff>=0.8,<1"]
+
+[project.scripts]
+registry-validator = "registry_validator.cli:main"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/registry_validator"]
+
+[tool.pytest.ini_options]
+addopts = "-q"
+testpaths = ["tests"]
+
+[tool.ruff]
+line-length = 100
+target-version = "py311"
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "SIM"]
