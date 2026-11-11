@@ -23,10 +23,17 @@ SENSITIVE_QUERY_RE = re.compile(
 
 
 def sanitize_headers(headers: Mapping[str, str]) -> dict[str, str]:
-    return {
-        key: REDACTED if key.lower() in SENSITIVE_HEADERS else value
-        for key, value in sorted(headers.items(), key=lambda item: item[0].lower())
-    }
+    sanitized = {}
+    for key, value in sorted(headers.items(), key=lambda item: item[0].lower()):
+        if key.lower() in SENSITIVE_HEADERS:
+            value = REDACTED
+        elif key.lower() == "location":
+            try:
+                value = sanitize_url(value)
+            except ValueError:
+                value = REDACTED
+        sanitized[key] = value
+    return sanitized
 
 
 def sanitize_url(url: str) -> str:
