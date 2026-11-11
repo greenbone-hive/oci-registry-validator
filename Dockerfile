@@ -9,7 +9,7 @@ WORKDIR /src
 
 RUN python -m venv /opt/validator
 
-COPY pyproject.toml README.md ./
+COPY pyproject.toml README.md LICENSE ./
 COPY src/ src/
 
 RUN /opt/validator/bin/pip install . \

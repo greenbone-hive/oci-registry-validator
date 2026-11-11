@@ -139,4 +139,4 @@ customer-facing product. It validates registry protocol behavior and network
 reachability but does not reproduce every scanner implementation detail or
 guarantee that a later image scan will succeed.
 
-See [`LICENSE.md`](LICENSE.md) for the repository's confidentiality terms.
+Licensed under the [MIT License](LICENSE).
