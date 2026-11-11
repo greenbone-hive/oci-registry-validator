@@ -31,7 +31,7 @@ def _parser() -> argparse.ArgumentParser:
 
 def _report(summary: dict[str, Any], output_dir: Path) -> str:
     lines = [
-        "OpenVAS registry validator PoC",
+        "OCI registry validator",
         f"Generated: {summary['generated_at']}",
         f"Mode: {summary['mode']}",
         f"Overall status: {summary['status']}",

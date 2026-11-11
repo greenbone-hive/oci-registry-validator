@@ -3,9 +3,9 @@ requires = ["hatchling>=1.26"]
 build-backend = "hatchling.build"
 
 [project]
-name = "openvas-registry-validator-poc"
+name = "oci-registry-validator"
 version = "0.1.0"
-description = "PoC validator for OpenVAS container-registry connectivity"
+description = "Validate OCI registry operations used by the OpenVAS container image scanner"
 readme = "README.md"
 requires-python = ">=3.11"
 dependencies = ["httpx>=0.27,<1"]

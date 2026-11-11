@@ -1,118 +1,142 @@
-# Registry validator PoC
+# OCI registry validator
 
-This PoC validates the OCI/Docker Distribution operations used by the OpenVAS
-container image scanner. It supports:
+`oci-registry-validator` checks whether an OCI/Docker Distribution registry
+supports the discovery and image-pull operations needed by the OpenVAS
+container image scanner. It records sanitized evidence for authentication,
+inventory, manifest, configuration-blob, and layer requests.
+
+The validator is diagnostic tooling. It does not scan images for
+vulnerabilities and it does not modify registry content.
+
+## Capabilities
+
+The validator supports:
 
 - anonymous, Basic, and Bearer challenge authentication;
 - caller-defined endpoint probes;
 - paginated catalog and tag inventory;
 - Docker schema 1/2 and OCI manifest/index traversal;
-- config blob retrieval;
-- optional full layer streaming and digest verification; and
+- image configuration blob retrieval;
+- optional full layer streaming with digest verification; and
 - sanitized request/response evidence.
 
-It is intentionally conservative: HTTPS is required unless explicitly
-disabled, external authentication and redirect hosts require allowlisting, and
-inventory and response sizes are bounded.
+Four modes control the amount of registry traffic:
 
-## Install
+- `probe` checks `/v2/` and explicitly configured endpoints.
+- `inventory` also walks catalog and tag-list endpoints.
+- `metadata` also retrieves configured image manifests and configuration
+  blobs.
+- `openvas` also streams image layers and verifies their digests, closely
+  reproducing the scanner's network requirements.
 
-Use a disposable virtual environment outside the repository:
+The implementation is deliberately conservative. HTTPS is required unless
+HTTP is explicitly enabled, authentication and redirect destinations must be
+allowlisted, and inventory, response, platform, and layer sizes are bounded.
+
+## Configuration
+
+Copy [`example.toml`](example.toml) and adjust the non-secret registry
+settings. Credentials and pre-issued tokens must be supplied through named
+environment variables; the validator rejects secrets stored directly in the
+TOML file.
 
 ```bash
-python3 -m venv /tmp/openvas-registry-validator-venv
-/tmp/openvas-registry-validator-venv/bin/pip install .
-```
-
-## Configure
-
-Copy `example.toml` and provide secrets through environment variables. Do not
-put credentials directly in the TOML file.
-
-```bash
+cp example.toml registry-validator.toml
 export REGISTRY_USERNAME='example-user'
 export REGISTRY_PASSWORD='example-password'
-cp example.toml /tmp/registry-validator.toml
 ```
 
-The four modes are:
-
-- `probe`: `/v2/` and configured explicit probes;
-- `inventory`: probe plus catalog and tag walking;
-- `metadata`: probe plus configured image manifests and config blobs; and
-- `openvas`: metadata plus streamed layer GETs and digest verification.
-
-Configured `repositories` are enumerated in all modes. Catalog walking is
+Configured `repositories` are enumerated in every mode. Catalog walking is
 performed in `inventory` mode and can also be enabled with
-`walk_catalog = true` in other modes. Images are validated only in `metadata`
-and `openvas` modes; inventory is never converted automatically into mass
-layer downloads.
+`walk_catalog = true`. Configured images are validated only in `metadata` and
+`openvas` modes. Inventory results are never converted automatically into
+bulk image downloads.
 
-## Run
+## Run with a container
 
-```bash
-/tmp/openvas-registry-validator-venv/bin/registry-validator \
-  --config /tmp/registry-validator.toml
-```
-
-Override the configured mode or evidence directory when needed:
+Build the minimal, non-root Alpine-based image:
 
 ```bash
-/tmp/openvas-registry-validator-venv/bin/registry-validator \
-  --config /tmp/registry-validator.toml \
-  --mode inventory \
-  --output /tmp/registry-evidence
+docker build -t oci-registry-validator .
 ```
 
-The command returns:
+Run it with a read-only configuration mount and a writable evidence directory:
 
-- `0` when all required operations pass;
+```bash
+mkdir -p registry-evidence
+docker run --rm \
+  -e REGISTRY_USERNAME \
+  -e REGISTRY_PASSWORD \
+  -v "$PWD/registry-validator.toml:/config/config.toml:ro" \
+  -v "$PWD/registry-evidence:/evidence" \
+  oci-registry-validator \
+  --config /config/config.toml \
+  --output /evidence
+```
+
+Pass `--mode probe`, `inventory`, `metadata`, or `openvas` to override the
+configured mode. The container runs as an unprivileged user, so the mounted
+evidence directory must be writable by the container user.
+
+## Run from Python
+
+Python 3.11 or newer is required.
+
+```bash
+python3 -m venv .venv
+.venv/bin/pip install .
+.venv/bin/registry-validator --config registry-validator.toml
+```
+
+The command exits with:
+
+- `0` when every required operation passes;
 - `1` when a required operation fails;
-- `2` for invalid configuration; and
-- `3` when strict inventory completeness was requested but inventory is
+- `2` when configuration is invalid; or
+- `3` when strict inventory completeness was requested but the result is
   partial.
 
 ## Evidence
 
-Each run writes:
+Each run writes the following files under the configured output directory:
 
 ```text
-<output>/
-├── summary.json
-├── exchanges.jsonl
-├── inventory.json
-├── report.txt
-└── bodies/
+summary.json
+exchanges.jsonl
+inventory.json
+report.txt
+bodies/
 ```
 
-Authorization headers, cookies, token response bodies, URL userinfo, and common
-signed-query parameters are redacted. Small non-sensitive response bodies are
-stored under `bodies/`; layer bodies are streamed, hashed, and discarded.
+Authorization headers, cookies, token response bodies, URL user information,
+and common signed-query parameters are redacted. Small non-sensitive response
+bodies may be stored under `bodies/`; layer bodies are streamed, hashed, and
+discarded.
 
-This is a PoC, not yet a hardened customer-facing diagnostic. Review the
-limitations in the parent project README before using it against sensitive
-registries.
+Evidence sanitization is defense in depth, not a guarantee that arbitrary
+registry responses contain no sensitive data. Review an evidence bundle
+before sharing it outside its intended audience.
 
-## Test
+## Development
+
+Install the test dependencies and run the checks:
 
 ```bash
-python3 -m venv /tmp/openvas-registry-validator-test-venv
-/tmp/openvas-registry-validator-test-venv/bin/pip install '.[test]'
-/tmp/openvas-registry-validator-test-venv/bin/ruff check .
-/tmp/openvas-registry-validator-test-venv/bin/ruff format --check .
-/tmp/openvas-registry-validator-test-venv/bin/pytest
+python3 -m venv .venv
+.venv/bin/pip install '.[test]'
+.venv/bin/ruff check .
+.venv/bin/ruff format --check .
+.venv/bin/pytest
 ```
 
-The end-to-end test starts an in-process token-authenticated mock registry and
-does not require external network access.
+The end-to-end tests use in-process mock registries and do not require access
+to an external registry.
 
-## Cleanup
+## Status and limitations
 
-Remove only the explicit disposable paths used above:
+This repository contains an early diagnostic implementation, not a supported
+customer-facing product. It validates registry protocol behavior and network
+reachability but does not reproduce every scanner implementation detail or
+guarantee that a later image scan will succeed.
 
-```bash
-rm -rf -- /tmp/openvas-registry-validator-venv
-rm -rf -- /tmp/openvas-registry-validator-test-venv
-rm -rf -- /tmp/registry-evidence
-rm -f -- /tmp/registry-validator.toml
-```
+See [`LICENSE.md`](LICENSE.md) for the repository's confidentiality terms.
